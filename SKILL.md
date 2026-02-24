@@ -142,6 +142,91 @@ Help users accomplish their goals in as few steps as possible. Every extra click
 
 ---
 
+## Programmatic Usage
+
+This skill activates through natural language — no special API parameters required. Pass the user's design request directly to any compatible AI agent. The skill loads automatically when the request matches design feedback, audit, or UX patterns.
+
+**Claude API — audit a URL:**
+```javascript
+import Anthropic from "@anthropic-ai/sdk";
+const client = new Anthropic();
+
+const response = await client.messages.create({
+  model: "claude-opus-4-5",
+  max_tokens: 1024,
+  messages: [{
+    role: "user",
+    content: "Review https://example.com and score it against the 15 simple design principles. Give me the top 3 violations with specific fixes."
+  }]
+});
+console.log(response.content[0].text);
+```
+
+**Claude API — code review:**
+```javascript
+const response = await client.messages.create({
+  model: "claude-opus-4-5",
+  max_tokens: 1024,
+  messages: [{
+    role: "user",
+    content: `Review this HTML and flag any simple web design principle violations:\n${yourCode}`
+  }]
+});
+```
+
+**Expected audit response format:**
+```
+[Principle #N — Name] Score: X/3
+Problem: specific description of the violation
+Fix: concrete actionable recommendation
+
+Total: XX/45
+Priority fixes: [ordered by impact]
+```
+
+---
+
+## Working with Exceptions
+
+When a project has legitimate constraints that conflict with a principle, use this process:
+
+1. **Name the exception explicitly** — state which principle is being overridden and why
+   - *"Overriding #6 Timeless — brand requires trend-forward visuals"*
+
+2. **Apply all remaining principles at full strength** — an exception to one never justifies relaxing others
+
+3. **Contain the exception** — limit it to the specific element that needs it, not the whole design
+
+4. **Flag it in audit output** so future reviewers know it was intentional
+   - *"Note: #6 Timeless intentionally overridden for brand alignment"*
+
+**Common legitimate exceptions:**
+| Constraint | Principle overridden | What to enforce instead |
+|---|---|---|
+| Brand requires trend-forward visuals | #6 Timeless | All 14 others at full strength |
+| Legal requires dense fine print | #3 Minimal | Make fine print as readable as possible (#4) |
+| Marketing requires multiple CTAs | #12 Focused | Clear visual hierarchy between them (#13) |
+| Complex product requires long onboarding | #15 Productive | Minimize steps within each stage |
+
+---
+
+## Context Management
+
+This skill uses **progressive disclosure** to manage context efficiently:
+
+**Always in context** (this file — SKILL.md):
+- All 15 principles as compact summaries with violations and guidance
+- Example prompts, quick checklist, scoring rubric
+- Programmatic usage examples, exception handling
+
+**Load on demand** — read these reference files when needed:
+
+- **`references/principles.md`** — Deep implementation guidance for all 15 principles: detailed code patterns (before/after), CSS examples, performance budgets, contrast requirements, form optimization patterns. Load this when giving in-depth critiques, designing from scratch, or when the user asks for implementation-level detail on any specific principle.
+
+- **`references/audit-guide.md`** — Structured audit workflows by site type (landing page, SaaS, e-commerce, blog, portfolio), scoring rubric, and templates for presenting findings to clients or teams. Load this when the user requests a formal audit report or asks how to structure and present findings.
+
+---
+
 ## How to Respond
 
 ### Design Audits
@@ -173,6 +258,67 @@ Common code violations:
 1. Start with words and content structure — layout and visuals come last
 2. Default to: system fonts, single-column layout, black on white
 3. Add visual complexity only when it demonstrably helps comprehension
+
+**Starter HTML structure:**
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Page title — Site name</title>
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">Logo</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/login">Sign in</a>
+      <a href="/start" class="btn">Get started</a>
+    </nav>
+  </header>
+  <main>
+    <section class="hero">
+      <h1>Clear value proposition for your specific audience</h1>
+      <p>One sentence expanding on the headline.</p>
+      <a href="/start" class="btn-primary">Primary action</a>
+    </section>
+  </main>
+</body>
+</html>
+```
+
+**Starter CSS (typographic foundation):**
+```css
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 1.125rem;
+  line-height: 1.65;
+  color: #1a1a1a;
+  background: #fff;
+}
+
+h1 { font-size: clamp(2rem, 5vw, 3.5rem); line-height: 1.1; font-weight: 700; }
+h2 { font-size: clamp(1.5rem, 3vw, 2.25rem); line-height: 1.2; font-weight: 600; }
+
+.container { max-width: 68ch; margin: 0 auto; padding: 0 1.5rem; }
+
+.btn-primary {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background: #1a1a1a;
+  color: #fff;
+  border-radius: 6px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.btn-primary:hover { background: #333; }
+.btn-primary:focus-visible { outline: 2px solid #1a1a1a; outline-offset: 3px; }
+```
+
+For principle-level implementation detail (code patterns, performance budgets, accessibility specifics), read `references/principles.md`.
 
 ---
 
