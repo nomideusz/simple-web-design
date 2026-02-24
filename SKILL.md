@@ -174,6 +174,63 @@ const response = await client.messages.create({
 });
 ```
 
+**Claude API — design mockup or screenshot (image input):**
+```javascript
+import fs from "fs";
+
+// From a local file
+const imageBuffer = fs.readFileSync("mockup.png");
+const base64Image = imageBuffer.toString("base64");
+
+const response = await client.messages.create({
+  model: "claude-opus-4-5",
+  max_tokens: 1024,
+  messages: [{
+    role: "user",
+    content: [
+      {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: "image/png", // or image/jpeg, image/webp
+          data: base64Image,
+        },
+      },
+      {
+        type: "text",
+        text: "Evaluate this design mockup for visual clutter and adherence to the 15 simple design principles. Score each principle 1–3 and give a total out of 45.",
+      },
+    ],
+  }],
+});
+
+console.log(response.content[0].text);
+```
+
+**Claude API — mockup from URL:**
+```javascript
+const response = await client.messages.create({
+  model: "claude-opus-4-5",
+  max_tokens: 1024,
+  messages: [{
+    role: "user",
+    content: [
+      {
+        type: "image",
+        source: {
+          type: "url",
+          url: "https://example.com/mockup.png",
+        },
+      },
+      {
+        type: "text",
+        text: "Audit this mockup for visual clutter. List every element competing with the primary CTA and suggest what to remove.",
+      },
+    ],
+  }],
+});
+```
+
 **Expected audit response format:**
 ```
 [Principle #N — Name] Score: X/3
@@ -208,6 +265,37 @@ When a project has legitimate constraints that conflict with a principle, use th
 | Marketing requires multiple CTAs | #12 Focused | Clear visual hierarchy between them (#13) |
 | Complex product requires long onboarding | #15 Productive | Minimize steps within each stage |
 
+**Implementing exceptions programmatically:**
+```javascript
+// Build a prompt that overrides specific principles while enforcing all others
+function buildExceptionPrompt(overrides) {
+  const exceptionLines = overrides
+    .map(({ principle, number, reason }) =>
+      `- Override Principle #${number} (${principle}): ${reason}`)
+    .join("\n");
+
+  return `Review this design with the following intentional exceptions:\n${exceptionLines}
+
+For all other principles not listed above, apply full enforcement at normal strength.
+In your output, mark each exception clearly as: [EXCEPTION: #N ${name} — intentional]
+Do not penalize overridden principles in the score. Recalculate the total out of the remaining principles only.`;
+}
+
+// Example usage
+const prompt = buildExceptionPrompt([
+  { number: 6, principle: "Timeless", reason: "Brand guidelines require current design trends" },
+  { number: 3, principle: "Minimal",  reason: "Legal requires disclosure text on every page" },
+]);
+
+const response = await client.messages.create({
+  model: "claude-opus-4-5",
+  max_tokens: 1024,
+  messages: [
+    { role: "user", content: prompt + "\n\nPage to review: https://example.com" }
+  ],
+});
+```
+
 ---
 
 ## Context Management
@@ -224,6 +312,50 @@ This skill uses **progressive disclosure** to manage context efficiently:
 - **`references/principles.md`** — Deep implementation guidance for all 15 principles: detailed code patterns (before/after), CSS examples, performance budgets, contrast requirements, form optimization patterns. Load this when giving in-depth critiques, designing from scratch, or when the user asks for implementation-level detail on any specific principle.
 
 - **`references/audit-guide.md`** — Structured audit workflows by site type (landing page, SaaS, e-commerce, blog, portfolio), scoring rubric, and templates for presenting findings to clients or teams. Load this when the user requests a formal audit report or asks how to structure and present findings.
+
+**Progressive disclosure implementation** — how to load reference files in code:
+```javascript
+import fs from "fs";
+import path from "path";
+import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic();
+const skillRoot = path.join(process.env.HOME, ".agents/skills/simple-web-design");
+
+function buildSystemPrompt(userQuery) {
+  // SKILL.md is always loaded as the base context
+  let context = fs.readFileSync(path.join(skillRoot, "SKILL.md"), "utf-8");
+
+  // Load principles.md for deep implementation / code-level questions
+  const needsPrinciples = /implement|code|css|html|pattern|how to|example|from scratch/i.test(userQuery);
+  if (needsPrinciples) {
+    context += "\n\n" + fs.readFileSync(path.join(skillRoot, "references/principles.md"), "utf-8");
+  }
+
+  // Load audit-guide.md for formal audit / client-facing requests
+  const needsAuditGuide = /audit report|client|team|present|formal|deliverable/i.test(userQuery);
+  if (needsAuditGuide) {
+    context += "\n\n" + fs.readFileSync(path.join(skillRoot, "references/audit-guide.md"), "utf-8");
+  }
+
+  return context;
+}
+
+async function reviewDesign(userQuery) {
+  const response = await client.messages.create({
+    model: "claude-opus-4-5",
+    max_tokens: 2048,
+    system: buildSystemPrompt(userQuery),
+    messages: [{ role: "user", content: userQuery }],
+  });
+  return response.content[0].text;
+}
+
+// Usage
+const feedback = await reviewDesign(
+  "Review https://example.com and score it against the 15 simple design principles."
+);
+```
 
 ---
 
