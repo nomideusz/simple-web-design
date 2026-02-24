@@ -4,7 +4,7 @@
 
 Install with:
 ```bash
-npx skills add <your-github-username>/simple-web-design
+npx skills add nomideusz/simple-web-design
 ```
 
 ---
