@@ -249,10 +249,42 @@ const clutterAuditPrompt =
    4. Apply principles #1 (Content First), #3 (Minimal), #12 (Focused), #14 (Distraction Free)
    5. Recommend specific removals or reductions`;
 
-// Single-principle deep dive
+// Single-principle deep dive — generic template
 const singlePrinciplePrompt = (url, principleNum, principleName) =>
   `Analyze ${url} specifically for violations of Principle #${principleNum}: ${principleName}.
    Give 3–5 specific violations with exact locations (element, section, or line) and fixes.`;
+
+// Worked example: identifying Minimal (#3) violations on a specific page
+const minimalViolationsPrompt = (url) =>
+  `Audit ${url} specifically for violations of Principle #3: Minimal.
+   Minimal means every element must justify its existence. Apply the "earn your place" test to each element.
+
+   Check for:
+   - Navigation items that could be removed or consolidated
+   - Decorative elements that add no information (icons without labels, stock imagery, gradient overlays)
+   - Competing simultaneous interruptions (cookie banners + chat bubbles + pop-ups)
+   - Feature lists, sidebars, or widgets not used by most visitors
+   - Content repeated across the page without adding new meaning
+
+   For each violation found:
+   1. Name the element and its location on the page
+   2. Explain what the user loses if it were removed (if the answer is "nothing" → remove it)
+   3. Give a specific fix: remove, consolidate, or defer
+
+   Score the page on Minimal: 1 (cluttered), 2 (acceptable), 3 (restrained). Explain the score.`;
+
+// Other principle-specific examples
+const accessibilityViolationsPrompt = (url) =>
+  `Audit ${url} for violations of Principle #11: Accessible (WCAG 2.1 AA).
+   Check: text contrast ≥ 4.5:1, tap targets ≥ 44×44px, keyboard navigation, focus states visible,
+   color not used as the sole meaning carrier, all images have descriptive alt text.
+   Report each failure with: element, location, current value, required value, fix.`;
+
+const typographyViolationsPrompt = (url) =>
+  `Audit ${url} for violations of Principle #4: Typographic.
+   Check: body font size (must be ≥16px), line-height (must be 1.5–1.7), line length (must be ≤80ch),
+   number of typefaces (must be ≤2), hierarchy clarity (size/weight, not color alone).
+   Report each failure with the current value, required value, and corrected CSS.`;
 ```
 
 ### API Examples
@@ -393,35 +425,82 @@ When a project has legitimate constraints that conflict with a principle, use th
 | Marketing requires multiple CTAs | #12 Focused | Clear visual hierarchy between them (#13) |
 | Complex product requires long onboarding | #15 Productive | Minimize steps within each stage |
 
-**Implementing exceptions programmatically:**
+**When to use exceptions vs. when to push back:**
+
+Exceptions are appropriate when there is a **genuine external constraint** the design cannot override:
+- Legal/regulatory requirements (disclosures, compliance text)
+- Brand identity decisions made above the project scope
+- Third-party integrations with fixed UI (payment widgets, maps, chat SDKs)
+
+Exceptions are **not** appropriate for:
+- Aesthetic preference ("the client likes animations") → address with principle #5
+- "Everyone else does it" → that's exactly what principle #6 exists to prevent
+- Developer convenience → principle #8 requires simpler solutions, not exemptions
+
+**Implementing exceptions programmatically (with validation):**
 ```javascript
-// Build a prompt that overrides specific principles while enforcing all others
+const VALID_PRINCIPLES = new Map([
+  [1, "Content First"], [2, "Wordy"], [3, "Minimal"], [4, "Typographic"],
+  [5, "Modest"], [6, "Timeless"], [7, "Materially Honest"], [8, "Easy to Implement"],
+  [9, "Commercially Valuable"], [10, "Performant"], [11, "Accessible"],
+  [12, "Focused"], [13, "Clear"], [14, "Distraction Free"], [15, "Productive"],
+]);
+
 function buildExceptionPrompt(overrides) {
+  // Validate all overrides before building the prompt
+  if (!Array.isArray(overrides) || overrides.length === 0) {
+    throw new Error("overrides must be a non-empty array");
+  }
+
+  for (const override of overrides) {
+    const { number, principle, reason } = override;
+    if (!VALID_PRINCIPLES.has(number)) {
+      throw new Error(`Invalid principle number: ${number}. Must be 1–15.`);
+    }
+    if (!reason || reason.trim().length < 10) {
+      throw new Error(`Override for #${number} needs a substantive reason (got: "${reason}")`);
+    }
+    // Auto-correct principle name if wrong
+    override.principle = VALID_PRINCIPLES.get(number);
+  }
+
   const exceptionLines = overrides
-    .map(({ principle, number, reason }) =>
+    .map(({ number, principle, reason }) =>
       `- Override Principle #${number} (${principle}): ${reason}`)
     .join("\n");
 
+  const remainingCount = 15 - overrides.length;
+
   return `Review this design with the following intentional exceptions:\n${exceptionLines}
 
-For all other principles not listed above, apply full enforcement at normal strength.
-In your output, mark each exception clearly as: [EXCEPTION: #N ${name} — intentional]
-Do not penalize overridden principles in the score. Recalculate the total out of the remaining principles only.`;
+For all ${remainingCount} remaining principles, apply full enforcement at normal strength.
+In your output, mark each exception as: [EXCEPTION: #N Name — intentional: reason]
+Do not penalize overridden principles in the score.
+Recalculate the total out of ${remainingCount * 3} (${remainingCount} principles × 3).`;
 }
 
-// Example usage
-const prompt = buildExceptionPrompt([
-  { number: 6, principle: "Timeless", reason: "Brand guidelines require current design trends" },
-  { number: 3, principle: "Minimal",  reason: "Legal requires disclosure text on every page" },
-]);
+// Example: brand + legal constraints
+try {
+  const prompt = buildExceptionPrompt([
+    { number: 6, reason: "Brand guidelines require current design trends" },
+    { number: 3, reason: "Legal compliance requires disclosure text on every page" },
+  ]);
 
-const response = await client.messages.create({
-  model: "claude-opus-4-5",
-  max_tokens: 1024,
-  messages: [
-    { role: "user", content: prompt + "\n\nPage to review: https://example.com" }
-  ],
-});
+  const response = await client.messages.create({
+    model: "claude-opus-4-5",
+    max_tokens: 1024,
+    messages: [{ role: "user", content: prompt + "\n\nPage to review: https://example.com" }],
+  });
+  console.log(response.content[0].text);
+} catch (error) {
+  if (error.message.includes("Invalid principle")) {
+    console.error("Fix: use principle numbers 1–15");
+  } else if (error.message.includes("substantive reason")) {
+    console.error("Fix: provide a clear business/legal reason for each exception");
+  } else {
+    throw error;
+  }
+}
 ```
 
 ---
