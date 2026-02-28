@@ -35,13 +35,13 @@ Once installed, use any of these with your agent:
 
 **Audit a live site**
 ```
-Review https://mysite.com and score it against the 15 simple design principles.
+Review https://example.com and score it against the 15 simple design principles.
 Give me the top 3 violations with specific fixes.
 ```
 
 **Score a page**
 ```
-Score my landing page at https://mysite.com on all 15 principles from 1–3.
+Score my landing page at <YOUR_URL> on all 15 principles from 1–3.
 Give me a total out of 45 and prioritize the worst issues.
 ```
 
