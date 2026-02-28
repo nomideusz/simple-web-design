@@ -200,188 +200,94 @@ async function auditPage(userInput) {
 
 ## Programmatic Usage
 
-This skill activates through natural language — no special API parameters required. Pass the user's design request directly to any compatible AI agent. The skill loads automatically when the request matches design feedback, audit, or UX patterns.
+This skill activates through natural language. Pass the design request directly to any compatible AI agent.
 
-### Setup
+### Prompt Templates
 
-```bash
-npm install @anthropic-ai/sdk
-export ANTHROPIC_API_KEY="your-key-here"
+Structure every prompt with: **what to analyze** + **which principles** + **output format**.
+
+**Design feedback on a URL:**
+```
+Review the design of [URL] against the 15 Simple Web Design principles.
+For each violated principle: name it, describe the specific problem, give a concrete fix.
+Prioritize by impact on user experience. Top 3–5 violations only.
 ```
 
-### Prompt Engineering
+**Comprehensive UX/UI audit:**
+```
+Conduct a comprehensive UX/UI audit of [URL] using all 15 Simple Web Design principles.
+For each principle (1–15): score it 1 (poor) / 2 (acceptable) / 3 (good).
+Format each as: [#N — Principle Name] Score: X/3 | Finding: ... | Fix: ...
+End with: Total: XX/45 and a prioritized list of the 3 most impactful changes.
+```
 
-The prompt text is what determines the quality of design feedback. Structure prompts with: **what to analyze** + **which principles to apply** + **output format**.
+**Design scoring with improvements:**
+```
+Score [URL] on all 15 Simple Web Design principles from 1–3.
+Give a total out of 45.
+For anything below 3: explain the specific violation and give an actionable fix.
+Order your recommendations by impact — conversion issues first, then clarity, then accessibility.
+```
 
-**Prompt templates by feedback type:**
+**Frontend code review:**
+```
+Review this frontend code for Simple Web Design principle violations:
 
-```javascript
-// General design feedback on a URL
-const urlFeedbackPrompt = (url) =>
-  `Review the design of ${url} against the 15 Simple Web Design principles.
-   For each violated principle: name it, describe the specific problem, give a concrete fix.
-   Prioritize by impact on user experience. Top 3–5 violations only.`;
+[paste HTML/CSS]
 
-// Comprehensive UX/UI audit
-const comprehensiveAuditPrompt = (url) =>
-  `Conduct a comprehensive UX/UI audit of ${url} using all 15 Simple Web Design principles.
-   For each principle (1–15): score it 1 (poor) / 2 (acceptable) / 3 (good).
-   Format: [#N — Principle Name] Score: X/3 | Finding: ... | Fix: ...
-   End with: Total: XX/45 and a prioritized list of the 3 most impactful changes.`;
-
-// Code review
-const codeReviewPrompt = (code) =>
-  `Review this frontend code for Simple Web Design principle violations:
-
-${code}
-
-For each violation found:
+For each violation:
 - Name the principle (#N — Name)
 - Quote the specific line(s) causing the issue
-- Provide corrected code`;
-
-// Mockup clutter analysis
-const clutterAuditPrompt =
-  `Evaluate this design mockup for visual clutter and simplicity.
-   1. Count distinct elements visible above the fold
-   2. Identify the primary CTA — is it visually dominant?
-   3. List every element competing with the primary CTA, in order of severity
-   4. Apply principles #1 (Content First), #3 (Minimal), #12 (Focused), #14 (Distraction Free)
-   5. Recommend specific removals or reductions`;
-
-// Single-principle deep dive — generic template
-const singlePrinciplePrompt = (url, principleNum, principleName) =>
-  `Analyze ${url} specifically for violations of Principle #${principleNum}: ${principleName}.
-   Give 3–5 specific violations with exact locations (element, section, or line) and fixes.`;
-
-// Worked example: identifying Minimal (#3) violations on a specific page
-const minimalViolationsPrompt = (url) =>
-  `Audit ${url} specifically for violations of Principle #3: Minimal.
-   Minimal means every element must justify its existence. Apply the "earn your place" test to each element.
-
-   Check for:
-   - Navigation items that could be removed or consolidated
-   - Decorative elements that add no information (icons without labels, stock imagery, gradient overlays)
-   - Competing simultaneous interruptions (cookie banners + chat bubbles + pop-ups)
-   - Feature lists, sidebars, or widgets not used by most visitors
-   - Content repeated across the page without adding new meaning
-
-   For each violation found:
-   1. Name the element and its location on the page
-   2. Explain what the user loses if it were removed (if the answer is "nothing" → remove it)
-   3. Give a specific fix: remove, consolidate, or defer
-
-   Score the page on Minimal: 1 (cluttered), 2 (acceptable), 3 (restrained). Explain the score.`;
-
-// Other principle-specific examples
-const accessibilityViolationsPrompt = (url) =>
-  `Audit ${url} for violations of Principle #11: Accessible (WCAG 2.1 AA).
-   Check: text contrast ≥ 4.5:1, tap targets ≥ 44×44px, keyboard navigation, focus states visible,
-   color not used as the sole meaning carrier, all images have descriptive alt text.
-   Report each failure with: element, location, current value, required value, fix.`;
-
-const typographyViolationsPrompt = (url) =>
-  `Audit ${url} for violations of Principle #4: Typographic.
-   Check: body font size (must be ≥16px), line-height (must be 1.5–1.7), line length (must be ≤80ch),
-   number of typefaces (must be ≤2), hierarchy clarity (size/weight, not color alone).
-   Report each failure with the current value, required value, and corrected CSS.`;
+- Provide corrected code
 ```
 
-### API Examples
-
-**Audit a URL:**
-```javascript
-import Anthropic from "@anthropic-ai/sdk";
-
-const client = new Anthropic(); // reads ANTHROPIC_API_KEY from env
-
-async function auditUrl(url) {
-  try {
-    const response = await client.messages.create({
-      model: "claude-opus-4-5",
-      max_tokens: 1024,
-      messages: [{
-        role: "user",
-        content: `Conduct a comprehensive UX/UI audit of ${url} using all 15 Simple Web Design principles.
-For each principle score it 1–3. Format: [#N — Name] Score: X/3 | Finding: ... | Fix: ...
-End with Total: XX/45 and the 3 most impactful changes.`
-      }]
-    });
-    return response.content[0].text;
-  } catch (error) {
-    if (error.status === 401) throw new Error("Invalid API key — check ANTHROPIC_API_KEY");
-    if (error.status === 429) throw new Error("Rate limit hit — retry after " + error.headers["retry-after"] + "s");
-    if (error.status >= 500) throw new Error("Anthropic server error — retry with backoff");
-    throw error;
-  }
-}
+**Design mockup / visual clutter audit:**
+```
+Evaluate this design mockup for visual clutter and simplicity.
+1. Count distinct elements visible above the fold
+2. Identify the primary CTA — is it visually dominant?
+3. List every element competing with the primary CTA, ordered by severity
+4. Apply principles #1 (Content First), #3 (Minimal), #12 (Focused), #14 (Distraction Free) — score each 1–3
+5. Recommend specific removals or reductions
 ```
 
-**Code review:**
-```javascript
-async function reviewCode(htmlCss) {
-  try {
-    const response = await client.messages.create({
-      model: "claude-opus-4-5",
-      max_tokens: 1024,
-      messages: [{
-        role: "user",
-        content: `Review this frontend code for Simple Web Design principle violations.
-For each violation: name the principle, quote the offending line(s), provide corrected code.
+**Build a page from scratch:**
+```
+Help me design a [page type, e.g. SaaS landing page / portfolio / pricing page] from scratch
+using Simple Web Design principles.
 
-${htmlCss}`
-      }]
-    });
-    return response.content[0].text;
-  } catch (error) {
-    if (error.status === 400) throw new Error("Input too long — split code into smaller chunks");
-    throw error;
-  }
-}
+Follow this sequence:
+1. Start with content structure only — headlines, body copy, CTAs — before any layout decisions
+2. Apply #1 Content First: what is the ONE thing the user came to this page for?
+3. Apply #9 Commercially Valuable: where does the primary CTA go? What does it say?
+4. Apply #4 Typographic: recommend font stack, size, line-height, max line length
+5. Apply #3 Minimal: what should NOT be on this page?
+6. Then suggest layout and visual treatment
+
+Default to: system fonts, single-column layout, black text on white, no decorative elements.
+Justify every design decision with a principle number.
 ```
 
-**Design mockup or screenshot (image input):**
-```javascript
-import fs from "fs";
+**Single-principle violation check:**
+```
+Audit [URL] specifically for violations of Principle #[N]: [Name].
+Give 3–5 specific violations with exact locations (element, section, or line) and fixes.
+Score the page on this principle: 1 (poor), 2 (acceptable), 3 (good). Explain the score.
+```
 
-async function auditMockup(imagePath) {
-  let imageData;
-  try {
-    imageData = fs.readFileSync(imagePath).toString("base64");
-  } catch {
-    throw new Error(`Cannot read image file: ${imagePath}`);
-  }
+**Minimal violations (worked example):**
+```
+Audit [URL] specifically for violations of Principle #3: Minimal.
+Minimal means every element must justify its existence — apply the "earn your place" test.
 
-  const ext = imagePath.split(".").pop().toLowerCase();
-  const mediaTypes = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" };
-  const mediaType = mediaTypes[ext];
-  if (!mediaType) throw new Error(`Unsupported image type: .${ext} — use png, jpg, or webp`);
+Check for:
+- Navigation items that could be removed or consolidated
+- Decorative elements that add no information (icons without labels, stock imagery, gradient overlays)
+- Competing simultaneous interruptions (cookie banners + chat bubbles + pop-ups)
+- Feature lists, sidebars, or widgets not used by most visitors
 
-  try {
-    const response = await client.messages.create({
-      model: "claude-opus-4-5",
-      max_tokens: 1024,
-      messages: [{
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: mediaType, data: imageData } },
-          { type: "text", text: `Evaluate this design mockup for visual clutter and simplicity.
-1. Count elements above the fold
-2. Identify the primary CTA — is it dominant?
-3. List elements competing with the primary CTA, by severity
-4. Apply principles #1, #3, #12, #14 and score each 1–3
-5. Recommend specific removals` }
-        ]
-      }]
-    });
-    return response.content[0].text;
-  } catch (error) {
-    if (error.status === 400 && error.message.includes("image")) {
-      throw new Error("Image too large — resize to under 5MB");
-    }
-    throw error;
-  }
-}
+For each violation: name the element, explain what the user loses if removed (if "nothing" → remove it), give a specific fix.
+Score the page on Minimal: 1 (cluttered) / 2 (acceptable) / 3 (restrained).
 ```
 
 **Expected audit response format:**
@@ -399,6 +305,157 @@ Priority fixes:
 1. Remove competing CTAs above fold (impacts conversion directly)
 2. Reduce navigation to 4 items
 3. Delay pop-ups until engagement signal
+```
+
+### API Integration
+
+**Setup:**
+```bash
+npm install @anthropic-ai/sdk
+# Get your API key at: https://console.anthropic.com/settings/keys
+export ANTHROPIC_API_KEY="sk-ant-..."   # or set in .env file
+```
+
+```javascript
+import Anthropic from "@anthropic-ai/sdk";
+const client = new Anthropic(); // reads ANTHROPIC_API_KEY from env automatically
+```
+
+**Audit a URL** (Q3 — comprehensive UX/UI audit):
+```javascript
+async function auditUrl(url) {
+  try {
+    const response = await client.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 2048,
+      messages: [{
+        role: "user",
+        content: `Conduct a comprehensive UX/UI audit of ${url} using all 15 Simple Web Design principles:
+#1 Content First, #2 Wordy, #3 Minimal, #4 Typographic, #5 Modest, #6 Timeless,
+#7 Materially Honest, #8 Easy to Implement, #9 Commercially Valuable, #10 Performant,
+#11 Accessible, #12 Focused, #13 Clear, #14 Distraction Free, #15 Productive.
+
+For each principle score it 1 (poor) / 2 (acceptable) / 3 (good).
+Format: [#N — Name] Score: X/3 | Finding: ... | Fix: ...
+End with: Total: XX/45 and the 3 most impactful changes, ordered by conversion impact first.`
+      }]
+    });
+    return response.content[0].text;
+  } catch (error) {
+    if (error.status === 401) throw new Error("Invalid API key — check ANTHROPIC_API_KEY env var");
+    if (error.status === 429) throw new Error("Rate limit hit — retry after " + (error.headers?.["retry-after"] ?? 60) + "s");
+    if (error.status >= 500) throw new Error("Anthropic server error — retry with exponential backoff");
+    throw error;
+  }
+}
+```
+
+**Design scoring with improvements** (Q7 — score and suggest fixes):
+```javascript
+async function scoreDesign(url) {
+  try {
+    const response = await client.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 2048,
+      messages: [{
+        role: "user",
+        content: `Score the design of ${url} on all 15 Simple Web Design principles (1–3 each, total out of 45).
+
+Evaluation priority order (apply in this sequence):
+1. Content-element ratio (#1 Content First) — check this first
+2. Primary CTA visibility above fold (#9 Commercially Valuable, #12 Focused)
+3. WCAG AA contrast on body text and CTA (#11 Accessible) — verify before approving any design
+4. Typography: body ≥16px, line-height 1.5–1.7, ≤80ch line length (#4 Typographic)
+5. Distraction count above fold (#14 Distraction Free, #3 Minimal)
+6. All remaining principles
+
+For anything scoring below 3: give a specific, actionable fix.
+Order recommendations by impact: conversion issues first, then clarity, then accessibility.`
+      }]
+    });
+    return response.content[0].text;
+  } catch (error) {
+    if (error.status === 401) throw new Error("Invalid API key — check ANTHROPIC_API_KEY");
+    if (error.status === 429) throw new Error("Rate limited — back off and retry");
+    throw error;
+  }
+}
+```
+
+**Code review** (Q5 — frontend code against design principles):
+```javascript
+async function reviewCode(htmlCss) {
+  try {
+    const response = await client.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 1024,
+      messages: [{
+        role: "user",
+        content: `Review this frontend code for Simple Web Design principle violations.
+Focus on: typography (#4), accessible contrast and focus states (#11), button/link affordances (#7),
+layout complexity (#8), font count and image weight (#10), CTA clarity (#9), distraction elements (#14).
+
+For each violation: name the principle, quote the offending line(s), provide corrected code.
+
+${htmlCss}`
+      }]
+    });
+    return response.content[0].text;
+  } catch (error) {
+    if (error.status === 400) throw new Error("Input too long — split code into smaller chunks (under 50KB)");
+    if (error.status === 401) throw new Error("Invalid API key — check ANTHROPIC_API_KEY");
+    throw error;
+  }
+}
+```
+
+**Design mockup or screenshot** (Q8 — image input, visual clutter analysis):
+```javascript
+import Anthropic from "@anthropic-ai/sdk";
+import fs from "fs";
+
+const client = new Anthropic(); // reads ANTHROPIC_API_KEY from env
+
+async function auditMockup(imagePath) {
+  let imageData;
+  try {
+    imageData = fs.readFileSync(imagePath).toString("base64");
+  } catch {
+    throw new Error(`Cannot read image file: ${imagePath}`);
+  }
+
+  const mediaTypes = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" };
+  const mediaType = mediaTypes[imagePath.split(".").pop().toLowerCase()];
+  if (!mediaType) throw new Error("Unsupported image type — use png, jpg, or webp");
+
+  try {
+    const response = await client.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 1024,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mediaType, data: imageData } },
+          { type: "text", text: `Evaluate this design mockup for visual clutter and simplicity.
+
+Apply these four principles:
+- #1 Content First: is the content-element ratio high? Do decorative elements outnumber content?
+- #3 Minimal: does every element earn its place? Apply the "earn your place" test to each element
+- #12 Focused: is there one clear primary purpose above the fold?
+- #14 Distraction Free: are there competing elements (autoplay, pop-ups, chat bubbles, sticky banners)?
+
+For each principle: score 1–3 and give specific findings.
+Then: count elements above the fold, identify the primary CTA, list competitors by severity, recommend removals.` }
+        ]
+      }]
+    });
+    return response.content[0].text;
+  } catch (error) {
+    if (error.status === 400 && error.message?.includes("image")) throw new Error("Image too large — resize under 5MB");
+    if (error.status === 401) throw new Error("Invalid API key — check ANTHROPIC_API_KEY");
+    throw error;
+  }
+}
 ```
 
 ---
