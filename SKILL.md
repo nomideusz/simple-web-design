@@ -198,111 +198,6 @@ async function auditPage(userInput) {
 
 ---
 
-## Working with Exceptions
-
-When a project has legitimate constraints that conflict with a principle, use this process:
-
-1. **Name the exception explicitly** — state which principle is being overridden and why
-   - *"Overriding #6 Timeless — brand requires trend-forward visuals"*
-
-2. **Apply all remaining principles at full strength** — an exception to one never justifies relaxing others
-
-3. **Contain the exception** — limit it to the specific element that needs it, not the whole design
-
-4. **Flag it in audit output** so future reviewers know it was intentional
-   - *"Note: #6 Timeless intentionally overridden for brand alignment"*
-
-**Common legitimate exceptions:**
-| Constraint | Principle overridden | What to enforce instead |
-|---|---|---|
-| Brand requires trend-forward visuals | #6 Timeless | All 14 others at full strength |
-| Legal requires dense fine print | #3 Minimal | Make fine print as readable as possible (#4) |
-| Marketing requires multiple CTAs | #12 Focused | Clear visual hierarchy between them (#13) |
-| Complex product requires long onboarding | #15 Productive | Minimize steps within each stage |
-
-**When to use exceptions vs. when to push back:**
-
-Exceptions are appropriate when there is a **genuine external constraint** the design cannot override:
-- Legal/regulatory requirements (disclosures, compliance text)
-- Brand identity decisions made above the project scope
-- Third-party integrations with fixed UI (payment widgets, maps, chat SDKs)
-
-Exceptions are **not** appropriate for:
-- Aesthetic preference ("the client likes animations") → address with principle #5
-- "Everyone else does it" → that's exactly what principle #6 exists to prevent
-- Developer convenience → principle #8 requires simpler solutions, not exemptions
-
-**Exception prompt template** — use this when sending to the AI agent:
-```
-Review [URL/code/mockup] with the following intentional exceptions:
-- Override Principle #[N] ([Name]): [reason — e.g. "brand guidelines require current design trends"]
-- Override Principle #[N] ([Name]): [reason — e.g. "legal compliance requires disclosure text"]
-
-For all remaining principles, apply full enforcement at normal strength.
-Mark each exception in output as: [EXCEPTION: #N Name — intentional: reason]
-Do not penalize overridden principles. Recalculate total out of [remaining × 3].
-```
-
-**Implementing exceptions programmatically (with validation):**
-```javascript
-import Anthropic from "@anthropic-ai/sdk";
-const client = new Anthropic();
-
-const VALID_PRINCIPLES = new Map([
-  [1, "Content First"], [2, "Wordy"], [3, "Minimal"], [4, "Typographic"],
-  [5, "Modest"], [6, "Timeless"], [7, "Materially Honest"], [8, "Easy to Implement"],
-  [9, "Commercially Valuable"], [10, "Performant"], [11, "Accessible"],
-  [12, "Focused"], [13, "Clear"], [14, "Distraction Free"], [15, "Productive"],
-]);
-
-function buildExceptionPrompt(overrides) {
-  if (!Array.isArray(overrides) || overrides.length === 0) {
-    throw new Error("overrides must be a non-empty array");
-  }
-  for (const override of overrides) {
-    if (!VALID_PRINCIPLES.has(override.number)) {
-      throw new Error(`Invalid principle number: ${override.number}. Must be 1–15.`);
-    }
-    if (!override.reason || override.reason.trim().length < 10) {
-      throw new Error(`Override for #${override.number} needs a substantive reason`);
-    }
-    override.principle = VALID_PRINCIPLES.get(override.number); // auto-correct name
-  }
-
-  const exceptionLines = overrides
-    .map(({ number, principle, reason }) => `- Override Principle #${number} (${principle}): ${reason}`)
-    .join("\n");
-  const remainingCount = 15 - overrides.length;
-
-  return `Review this design with the following intentional exceptions:\n${exceptionLines}
-
-For all ${remainingCount} remaining principles, apply full enforcement at normal strength.
-Mark each exception as: [EXCEPTION: #N Name — intentional: reason]
-Do not penalize overridden principles. Recalculate total out of ${remainingCount * 3}.`;
-}
-
-// Usage
-try {
-  const prompt = buildExceptionPrompt([
-    { number: 6, reason: "Brand guidelines require current design trends" },
-    { number: 3, reason: "Legal compliance requires disclosure text on every page" },
-  ]);
-
-  const response = await client.messages.create({
-    model: "claude-opus-4-5",
-    max_tokens: 1024,
-    messages: [{ role: "user", content: prompt + "\n\nPage to review: https://example.com" }],
-  });
-  console.log(response.content[0].text);
-} catch (error) {
-  if (error.message.includes("Invalid principle")) console.error("Fix: use principle numbers 1–15");
-  else if (error.message.includes("substantive reason")) console.error("Fix: provide a clear business/legal reason");
-  else throw error;
-}
-```
-
----
-
 ## Programmatic Usage
 
 ### Prerequisites
@@ -580,6 +475,107 @@ Then: count elements above the fold, identify the primary CTA, list competitors 
     if (error.status === 401) throw new Error("Invalid API key — check ANTHROPIC_API_KEY");
     throw error;
   }
+}
+```
+
+---
+
+## Working with Exceptions
+
+When a project has legitimate constraints that conflict with a principle, use this process:
+
+1. **Name the exception explicitly** — state which principle is being overridden and why
+   - *"Overriding #6 Timeless — brand requires trend-forward visuals"*
+
+2. **Apply all remaining principles at full strength** — an exception to one never justifies relaxing others
+
+3. **Contain the exception** — limit it to the specific element that needs it, not the whole design
+
+4. **Flag it in audit output** so future reviewers know it was intentional
+   - *"Note: #6 Timeless intentionally overridden for brand alignment"*
+
+**Common legitimate exceptions:**
+| Constraint | Principle overridden | What to enforce instead |
+|---|---|---|
+| Brand requires trend-forward visuals | #6 Timeless | All 14 others at full strength |
+| Legal requires dense fine print | #3 Minimal | Make fine print as readable as possible (#4) |
+| Marketing requires multiple CTAs | #12 Focused | Clear visual hierarchy between them (#13) |
+| Complex product requires long onboarding | #15 Productive | Minimize steps within each stage |
+
+**When to use exceptions vs. when to push back:**
+
+Exceptions are appropriate when there is a **genuine external constraint** the design cannot override:
+- Legal/regulatory requirements (disclosures, compliance text)
+- Brand identity decisions made above the project scope
+- Third-party integrations with fixed UI (payment widgets, maps, chat SDKs)
+
+Exceptions are **not** appropriate for:
+- Aesthetic preference ("the client likes animations") → address with principle #5
+- "Everyone else does it" → that's exactly what principle #6 exists to prevent
+- Developer convenience → principle #8 requires simpler solutions, not exemptions
+
+**Exception prompt template** — use this when sending to the AI agent:
+```
+Review [URL/code/mockup] with the following intentional exceptions:
+- Override Principle #[N] ([Name]): [reason — e.g. "brand guidelines require current design trends"]
+- Override Principle #[N] ([Name]): [reason — e.g. "legal compliance requires disclosure text"]
+
+For all remaining principles, apply full enforcement at normal strength.
+Mark each exception in output as: [EXCEPTION: #N Name — intentional: reason]
+Do not penalize overridden principles. Recalculate total out of [remaining × 3].
+```
+
+**Implementing exceptions programmatically (with validation):**
+```javascript
+import Anthropic from "@anthropic-ai/sdk";
+const client = new Anthropic();
+
+const VALID_PRINCIPLES = new Map([
+  [1, "Content First"], [2, "Wordy"], [3, "Minimal"], [4, "Typographic"],
+  [5, "Modest"], [6, "Timeless"], [7, "Materially Honest"], [8, "Easy to Implement"],
+  [9, "Commercially Valuable"], [10, "Performant"], [11, "Accessible"],
+  [12, "Focused"], [13, "Clear"], [14, "Distraction Free"], [15, "Productive"],
+]);
+
+function buildExceptionPrompt(overrides) {
+  if (!Array.isArray(overrides) || overrides.length === 0) {
+    throw new Error("overrides must be a non-empty array");
+  }
+  for (const override of overrides) {
+    if (!VALID_PRINCIPLES.has(override.number)) {
+      throw new Error(`Invalid principle number: ${override.number}. Must be 1–15.`);
+    }
+    if (!override.reason || override.reason.trim().length < 10) {
+      throw new Error(`Override for #${override.number} needs a substantive reason`);
+    }
+    override.principle = VALID_PRINCIPLES.get(override.number);
+  }
+  const exceptionLines = overrides
+    .map(({ number, principle, reason }) => `- Override Principle #${number} (${principle}): ${reason}`)
+    .join("\n");
+  const remainingCount = 15 - overrides.length;
+  return `Review this design with the following intentional exceptions:\n${exceptionLines}
+
+For all ${remainingCount} remaining principles, apply full enforcement at normal strength.
+Mark each exception as: [EXCEPTION: #N Name — intentional: reason]
+Do not penalize overridden principles. Recalculate total out of ${remainingCount * 3}.`;
+}
+
+try {
+  const prompt = buildExceptionPrompt([
+    { number: 6, reason: "Brand guidelines require current design trends" },
+    { number: 3, reason: "Legal compliance requires disclosure text on every page" },
+  ]);
+  const response = await client.messages.create({
+    model: "claude-opus-4-5",
+    max_tokens: 1024,
+    messages: [{ role: "user", content: prompt + "\n\nPage to review: https://example.com" }],
+  });
+  console.log(response.content[0].text);
+} catch (error) {
+  if (error.message.includes("Invalid principle")) console.error("Fix: use principle numbers 1–15");
+  else if (error.message.includes("substantive reason")) console.error("Fix: provide a clear business/legal reason");
+  else throw error;
 }
 ```
 
