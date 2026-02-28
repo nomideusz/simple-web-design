@@ -9,7 +9,7 @@ description: >
   or image data for design review. This skill is grounded in Anthony Hobday's "Simple Web Design"
   framework: 15 battle-tested principles that prioritize content, clarity, and long-term usability
   over visual complexity and trend-chasing.
-security:
+security: >
   external_content: true
   content_trust: untrusted
   injection_defense: enabled
