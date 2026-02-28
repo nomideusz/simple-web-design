@@ -25,6 +25,28 @@ e-commerce, dashboards, and any digital interface.
 
 ---
 
+## Installation
+
+```bash
+# skills.sh
+npx skills add nomideusz/simple-web-design
+
+# Context7
+npx ctx7 skills install nomideusz/simple-web-design
+```
+
+**Prerequisites**: Node.js 18+ and npm. Verify with `node -v` and `npm -v`.
+
+**Verify installation:**
+```bash
+npx skills list | grep simple-web-design
+# or check: ~/.agents/skills/simple-web-design/SKILL.md exists
+```
+
+**After installation**, the skill activates automatically when you ask your AI agent for design feedback, UX reviews, or web page help. No additional configuration required.
+
+---
+
 ## The 15 Principles
 
 ### 1. Content First
