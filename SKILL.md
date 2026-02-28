@@ -202,99 +202,171 @@ async function auditPage(userInput) {
 
 This skill activates through natural language — no special API parameters required. Pass the user's design request directly to any compatible AI agent. The skill loads automatically when the request matches design feedback, audit, or UX patterns.
 
-**Claude API — audit a URL:**
+### Setup
+
+```bash
+npm install @anthropic-ai/sdk
+export ANTHROPIC_API_KEY="your-key-here"
+```
+
+### Prompt Engineering
+
+The prompt text is what determines the quality of design feedback. Structure prompts with: **what to analyze** + **which principles to apply** + **output format**.
+
+**Prompt templates by feedback type:**
+
+```javascript
+// General design feedback on a URL
+const urlFeedbackPrompt = (url) =>
+  `Review the design of ${url} against the 15 Simple Web Design principles.
+   For each violated principle: name it, describe the specific problem, give a concrete fix.
+   Prioritize by impact on user experience. Top 3–5 violations only.`;
+
+// Comprehensive UX/UI audit
+const comprehensiveAuditPrompt = (url) =>
+  `Conduct a comprehensive UX/UI audit of ${url} using all 15 Simple Web Design principles.
+   For each principle (1–15): score it 1 (poor) / 2 (acceptable) / 3 (good).
+   Format: [#N — Principle Name] Score: X/3 | Finding: ... | Fix: ...
+   End with: Total: XX/45 and a prioritized list of the 3 most impactful changes.`;
+
+// Code review
+const codeReviewPrompt = (code) =>
+  `Review this frontend code for Simple Web Design principle violations:
+
+${code}
+
+For each violation found:
+- Name the principle (#N — Name)
+- Quote the specific line(s) causing the issue
+- Provide corrected code`;
+
+// Mockup clutter analysis
+const clutterAuditPrompt =
+  `Evaluate this design mockup for visual clutter and simplicity.
+   1. Count distinct elements visible above the fold
+   2. Identify the primary CTA — is it visually dominant?
+   3. List every element competing with the primary CTA, in order of severity
+   4. Apply principles #1 (Content First), #3 (Minimal), #12 (Focused), #14 (Distraction Free)
+   5. Recommend specific removals or reductions`;
+
+// Single-principle deep dive
+const singlePrinciplePrompt = (url, principleNum, principleName) =>
+  `Analyze ${url} specifically for violations of Principle #${principleNum}: ${principleName}.
+   Give 3–5 specific violations with exact locations (element, section, or line) and fixes.`;
+```
+
+### API Examples
+
+**Audit a URL:**
 ```javascript
 import Anthropic from "@anthropic-ai/sdk";
-const client = new Anthropic();
 
-const response = await client.messages.create({
-  model: "claude-opus-4-5",
-  max_tokens: 1024,
-  messages: [{
-    role: "user",
-    content: "Review https://example.com and score it against the 15 simple design principles. Give me the top 3 violations with specific fixes."
-  }]
-});
-console.log(response.content[0].text);
+const client = new Anthropic(); // reads ANTHROPIC_API_KEY from env
+
+async function auditUrl(url) {
+  try {
+    const response = await client.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 1024,
+      messages: [{
+        role: "user",
+        content: `Conduct a comprehensive UX/UI audit of ${url} using all 15 Simple Web Design principles.
+For each principle score it 1–3. Format: [#N — Name] Score: X/3 | Finding: ... | Fix: ...
+End with Total: XX/45 and the 3 most impactful changes.`
+      }]
+    });
+    return response.content[0].text;
+  } catch (error) {
+    if (error.status === 401) throw new Error("Invalid API key — check ANTHROPIC_API_KEY");
+    if (error.status === 429) throw new Error("Rate limit hit — retry after " + error.headers["retry-after"] + "s");
+    if (error.status >= 500) throw new Error("Anthropic server error — retry with backoff");
+    throw error;
+  }
+}
 ```
 
-**Claude API — code review:**
+**Code review:**
 ```javascript
-const response = await client.messages.create({
-  model: "claude-opus-4-5",
-  max_tokens: 1024,
-  messages: [{
-    role: "user",
-    content: `Review this HTML and flag any simple web design principle violations:\n${yourCode}`
-  }]
-});
+async function reviewCode(htmlCss) {
+  try {
+    const response = await client.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 1024,
+      messages: [{
+        role: "user",
+        content: `Review this frontend code for Simple Web Design principle violations.
+For each violation: name the principle, quote the offending line(s), provide corrected code.
+
+${htmlCss}`
+      }]
+    });
+    return response.content[0].text;
+  } catch (error) {
+    if (error.status === 400) throw new Error("Input too long — split code into smaller chunks");
+    throw error;
+  }
+}
 ```
 
-**Claude API — design mockup or screenshot (image input):**
+**Design mockup or screenshot (image input):**
 ```javascript
 import fs from "fs";
 
-// From a local file
-const imageBuffer = fs.readFileSync("mockup.png");
-const base64Image = imageBuffer.toString("base64");
+async function auditMockup(imagePath) {
+  let imageData;
+  try {
+    imageData = fs.readFileSync(imagePath).toString("base64");
+  } catch {
+    throw new Error(`Cannot read image file: ${imagePath}`);
+  }
 
-const response = await client.messages.create({
-  model: "claude-opus-4-5",
-  max_tokens: 1024,
-  messages: [{
-    role: "user",
-    content: [
-      {
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: "image/png", // or image/jpeg, image/webp
-          data: base64Image,
-        },
-      },
-      {
-        type: "text",
-        text: "Evaluate this design mockup for visual clutter and adherence to the 15 simple design principles. Score each principle 1–3 and give a total out of 45.",
-      },
-    ],
-  }],
-});
+  const ext = imagePath.split(".").pop().toLowerCase();
+  const mediaTypes = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" };
+  const mediaType = mediaTypes[ext];
+  if (!mediaType) throw new Error(`Unsupported image type: .${ext} — use png, jpg, or webp`);
 
-console.log(response.content[0].text);
-```
-
-**Claude API — mockup from URL:**
-```javascript
-const response = await client.messages.create({
-  model: "claude-opus-4-5",
-  max_tokens: 1024,
-  messages: [{
-    role: "user",
-    content: [
-      {
-        type: "image",
-        source: {
-          type: "url",
-          url: "https://example.com/mockup.png",
-        },
-      },
-      {
-        type: "text",
-        text: "Audit this mockup for visual clutter. List every element competing with the primary CTA and suggest what to remove.",
-      },
-    ],
-  }],
-});
+  try {
+    const response = await client.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 1024,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mediaType, data: imageData } },
+          { type: "text", text: `Evaluate this design mockup for visual clutter and simplicity.
+1. Count elements above the fold
+2. Identify the primary CTA — is it dominant?
+3. List elements competing with the primary CTA, by severity
+4. Apply principles #1, #3, #12, #14 and score each 1–3
+5. Recommend specific removals` }
+        ]
+      }]
+    });
+    return response.content[0].text;
+  } catch (error) {
+    if (error.status === 400 && error.message.includes("image")) {
+      throw new Error("Image too large — resize to under 5MB");
+    }
+    throw error;
+  }
+}
 ```
 
 **Expected audit response format:**
 ```
-[Principle #N — Name] Score: X/3
-Problem: specific description of the violation
-Fix: concrete actionable recommendation
+[#1 — Content First] Score: 2/3
+Finding: Hero section has a full-bleed stock photo pushing headline below fold on mobile
+Fix: Remove photo, make headline the visual centrepiece with a single CTA below it
 
-Total: XX/45
-Priority fixes: [ordered by impact]
+[#3 — Minimal] Score: 1/3
+Finding: Navigation has 9 items; cookie banner, live chat, and newsletter pop-up all load simultaneously
+Fix: Reduce nav to 4 core items; delay chat and pop-up until 60s dwell time
+
+Total: 28/45
+Priority fixes:
+1. Remove competing CTAs above fold (impacts conversion directly)
+2. Reduce navigation to 4 items
+3. Delay pop-ups until engagement signal
 ```
 
 ---
@@ -376,41 +448,60 @@ import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic();
-const skillRoot = path.join(process.env.HOME, ".agents/skills/simple-web-design");
+
+// Resolve skill root — set SKILL_ROOT env var or falls back to default install path
+const skillRoot = process.env.SKILL_ROOT
+  ?? path.join(process.env.HOME ?? "/root", ".agents/skills/simple-web-design");
+
+function readSkillFile(relativePath) {
+  const fullPath = path.join(skillRoot, relativePath);
+  try {
+    return fs.readFileSync(fullPath, "utf-8");
+  } catch {
+    console.warn(`[simple-web-design] Could not load ${relativePath} — skipping`);
+    return "";
+  }
+}
 
 function buildSystemPrompt(userQuery) {
-  // SKILL.md is always loaded as the base context
-  let context = fs.readFileSync(path.join(skillRoot, "SKILL.md"), "utf-8");
+  // SKILL.md is always the base context
+  let context = readSkillFile("SKILL.md");
 
   // Load principles.md for deep implementation / code-level questions
-  const needsPrinciples = /implement|code|css|html|pattern|how to|example|from scratch/i.test(userQuery);
-  if (needsPrinciples) {
-    context += "\n\n" + fs.readFileSync(path.join(skillRoot, "references/principles.md"), "utf-8");
-  }
+  const needsPrinciples = /implement|code|css|html|pattern|how to|example|from scratch|explain|detail/i.test(userQuery);
 
   // Load audit-guide.md for formal audit / client-facing requests
-  const needsAuditGuide = /audit report|client|team|present|formal|deliverable/i.test(userQuery);
-  if (needsAuditGuide) {
-    context += "\n\n" + fs.readFileSync(path.join(skillRoot, "references/audit-guide.md"), "utf-8");
-  }
+  const needsAuditGuide = /audit report|client|team|present|formal|deliverable|template/i.test(userQuery);
 
+  // Both can be loaded simultaneously — they cover different concerns
+  if (needsPrinciples) context += "\n\n" + readSkillFile("references/principles.md");
+  if (needsAuditGuide) context += "\n\n" + readSkillFile("references/audit-guide.md");
+
+  // If neither matched, SKILL.md alone has the 15 principles and is sufficient for most queries
   return context;
 }
 
 async function reviewDesign(userQuery) {
-  const response = await client.messages.create({
-    model: "claude-opus-4-5",
-    max_tokens: 2048,
-    system: buildSystemPrompt(userQuery),
-    messages: [{ role: "user", content: userQuery }],
-  });
-  return response.content[0].text;
+  try {
+    const response = await client.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 2048,
+      system: buildSystemPrompt(userQuery),
+      messages: [{ role: "user", content: userQuery }],
+    });
+    return response.content[0].text;
+  } catch (error) {
+    if (error.status === 401) throw new Error("Invalid API key — check ANTHROPIC_API_KEY env var");
+    if (error.status === 429) throw new Error("Rate limited — back off and retry");
+    throw error;
+  }
 }
 
 // Usage
 const feedback = await reviewDesign(
   "Review https://example.com and score it against the 15 simple design principles."
 );
+console.log(feedback);
 ```
 
 ---
